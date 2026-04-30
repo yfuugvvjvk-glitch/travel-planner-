@@ -1,0 +1,849 @@
+<!doctype html>
+<html lang="ro">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Planificator Traseu România</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🗺️</text></svg>"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <h1><i class="fa-solid fa-route"></i> Planificator Traseu</h1>
+        <button id="btn-add-location" title="Adaugă locație">
+          <i class="fa-solid fa-plus"></i> Adaugă locație
+        </button>
+      </div>
+
+      <!-- Transport mode -->
+      <div id="transport-bar">
+        <button
+          class="transport-btn active"
+          data-mode="driving"
+          title="Mașină personală"
+        >
+          <i class="fa-solid fa-car"></i><span>Mașină</span>
+        </button>
+        <button class="transport-btn" data-mode="walking" title="Mers pe jos">
+          <i class="fa-solid fa-person-walking"></i><span>Jos</span>
+        </button>
+        <button class="transport-btn" data-mode="cycling" title="Bicicletă">
+          <i class="fa-solid fa-bicycle"></i><span>Bicicletă</span>
+        </button>
+        <button
+          class="transport-btn"
+          data-mode="transit"
+          title="Transport în comun"
+        >
+          <i class="fa-solid fa-bus"></i><span>Comun</span>
+        </button>
+      </div>
+
+      <!-- Filter bar -->
+      <div id="filter-bar">
+        <div id="filter-row">
+          <i class="fa-solid fa-filter filter-icon"></i>
+          <input
+            type="text"
+            id="filter-input"
+            placeholder="Filtrează: județ, localitate, regiune..."
+            autocomplete="off"
+          />
+          <button id="btn-filter-favorites" class="fav-filter-btn" title="Arată doar favorite">
+            <i class="fa-regular fa-star"></i>
+          </button>
+          <button id="btn-filter-by-color" class="fav-filter-btn" title="Filtrează după culoare/etichetă" style="font-size:.75rem;padding:4px 5px">
+            <i class="fa-solid fa-palette"></i>
+          </button>
+          <button
+            id="btn-filter-clear"
+            class="filter-clear hidden"
+            title="Șterge filtru"
+          >
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
+          <div id="filter-count-label" class="filter-count"></div>
+          <button id="filter-expand-btn" title="Arată/ascunde filtre">
+            <i class="fa-solid fa-chevron-down"></i> Filtre
+          </button>
+        </div>
+        <div id="filter-collapsible">
+          <div id="filter-chips"></div>
+          <div id="filter-quick"></div>
+        </div>
+      </div>
+      <div id="departure-bar">
+        <div id="departure-row1">
+          <label><i class="fa-solid fa-clock"></i></label>
+          <select id="departure-type">
+            <option value="now">Plecare acum</option>
+            <option value="depart">Plecare la ora</option>
+            <option value="arrive">Sosire la ora</option>
+            <option value="interval">Interval ore</option>
+          </select>
+          <input
+            type="datetime-local"
+            id="departure-time"
+            style="display: none"
+          />
+        </div>
+        <div id="departure-interval-row" style="display: none">
+          <span>De la</span>
+          <input type="time" id="interval-from" value="06:00" />
+          <span>până la</span>
+          <input type="time" id="interval-to" value="10:00" />
+        </div>
+      </div>
+
+      <!-- Route summary -->
+      <div id="route-summary" class="hidden">
+        <div id="summary-stats">
+          <span id="stat-distance"><i class="fa-solid fa-road"></i> --</span>
+          <span id="stat-time"><i class="fa-solid fa-clock"></i> --</span>
+          <span id="stat-cost"><i class="fa-solid fa-wallet"></i> --</span>
+          <button
+            class="result-toggle-btn"
+            id="btn-toggle-segments"
+            title="Arată/ascunde segmente"
+          >
+            <i class="fa-solid fa-chevron-down"></i>
+          </button>
+        </div>
+        <div id="segments-list"></div>
+        <div id="towns-panel" style="display: none">
+          <div
+            id="towns-header"
+            class="collapsible-header"
+            id="btn-toggle-towns"
+          >
+            <i class="fa-solid fa-map-pin"></i> Localități pe traseu
+            <span id="towns-loading" style="display: none"
+              ><i class="fa-solid fa-spinner fa-spin"></i
+            ></span>
+            <i class="fa-solid fa-chevron-down" style="margin-left: auto"></i>
+          </div>
+          <div id="towns-list"></div>
+        </div>
+      </div>
+
+      <!-- Interval variants panel -->
+      <div id="variants-panel" style="display: none">
+        <div id="variants-header">
+          <i class="fa-solid fa-list-ul"></i> Toate variantele în interval
+          <span id="variants-loading" style="display: none"
+            ><i class="fa-solid fa-spinner fa-spin"></i
+          ></span>
+        </div>
+        <div id="variants-list"></div>
+      </div>
+
+      <!-- Locations list -->
+      <div id="locations-list">
+        <div id="start-location-row">
+          <div id="start-search-box">
+            <div id="start-search-input-wrap">
+              <i class="fa-solid fa-flag-checkered start-icon"></i>
+              <input
+                type="text"
+                id="start-search-input"
+                placeholder="Start: adresă, localitate sau obiectiv..."
+                autocomplete="off"
+              />
+              <button
+                id="btn-start-clear"
+                class="search-clear hidden"
+                title="Șterge"
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+              <button id="btn-use-gps" title="Locație curentă GPS">
+                <i class="fa-solid fa-location-crosshairs"></i>
+              </button>
+            </div>
+            <ul id="start-suggestions" class="suggestions-list hidden"></ul>
+          </div>
+        </div>
+        <ul id="sortable-list"></ul>
+      </div>
+
+      <!-- Selection mode bar -->
+      <div id="selection-bar" style="display: none">
+        <span id="selection-count">0 selectate</span>
+        <div style="display: flex; gap: 6px">
+          <button id="btn-select-all">
+            <i class="fa-solid fa-check-double"></i> Toate
+          </button>
+          <button id="btn-select-none">
+            <i class="fa-solid fa-xmark"></i> Niciunul
+          </button>
+          <button id="btn-route-selected" disabled>
+            <i class="fa-solid fa-route"></i> Traseu din selectate
+          </button>
+        </div>
+      </div>
+
+      <div id="sidebar-footer">
+        <button id="btn-calculate" disabled>
+          <i class="fa-solid fa-map-marked-alt"></i> Calculează traseu
+        </button>
+        <button
+          id="btn-select-mode"
+          title="Selectează locații individuale pentru traseu personalizat"
+        >
+          <i class="fa-solid fa-list-check"></i>
+        </button>
+        <button
+          id="btn-optimize"
+          disabled
+          title="Optimizează ordinea locațiilor pentru distanță minimă"
+        >
+          <i class="fa-solid fa-wand-magic-sparkles"></i>
+        </button>
+        <button id="btn-save-session" title="Salvează locațiile local">
+          <i class="fa-solid fa-floppy-disk"></i>
+        </button>
+        <button id="btn-export" title="Exportă locații în fișier JSON">
+          <i class="fa-solid fa-file-export"></i>
+        </button>
+        <button id="btn-import" title="Importă locații din fișier JSON">
+          <i class="fa-solid fa-file-import"></i>
+        </button>
+        <input
+          type="file"
+          id="import-file"
+          accept=".json"
+          style="display: none"
+        />
+        <button id="btn-clear" title="Șterge tot">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div id="map"></div>
+
+    <!-- Modal: Add/Edit Location -->
+    <div id="modal-overlay" class="hidden">
+      <div id="modal">
+        <div id="modal-header">
+          <h2 id="modal-title">Adaugă locație</h2>
+          <button id="modal-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="location-form">
+          <!-- Căutare rapidă obiectiv -->
+          <div class="form-row">
+            <label
+              >Caută obiectiv sau adresă
+              <span class="label-hint"
+                >(opțional — completează automat)</span
+              ></label
+            >
+            <div class="search-wrap" id="poi-search-wrap">
+              <i class="fa-solid fa-magnifying-glass search-icon"></i>
+              <input
+                type="text"
+                id="f-poi-search"
+                placeholder="ex: spital, biserică, Kaufland, Piața Unirii..."
+                autocomplete="off"
+              />
+              <button
+                type="button"
+                id="btn-poi-clear"
+                class="search-clear hidden"
+                title="Șterge"
+              >
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            </div>
+            <ul id="poi-suggestions" class="suggestions-list hidden"></ul>
+          </div>
+
+          <div class="form-divider"><span>sau completează manual</span></div>
+
+          <div class="form-row">
+            <label
+              >Stradă / Bulevard / Alee
+              <span class="label-hint"
+                >(opțional — fără stradă = centrul localității)</span
+              ></label
+            >
+            <input
+              type="text"
+              id="f-street"
+              placeholder="ex: Bulevardul Unirii"
+            />
+          </div>
+          <div class="form-row form-row-half">
+            <div>
+              <label
+                >Nr. stradă <span class="label-hint">(opțional)</span></label
+              >
+              <input type="text" id="f-number" placeholder="ex: 12" />
+            </div>
+            <div>
+              <label>Județ *</label>
+              <input
+                type="text"
+                id="f-county"
+                placeholder="ex: Iași"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-row form-row-half">
+            <div>
+              <label>Localitate *</label>
+              <input type="text" id="f-city" placeholder="ex: Iași" required />
+            </div>
+            <div>
+              <label>Tip localitate</label>
+              <select id="f-city-type">
+                <option value="">--</option>
+                <option value="sat">Sat</option>
+                <option value="comună">Comună</option>
+                <option value="oraș">Oraș</option>
+                <option value="municipiu">Municipiu</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>Telefon <span class="label-hint">(opțional)</span></label>
+            <input type="tel" id="f-phone" placeholder="ex: +40712345678" />
+          </div>
+          <div class="form-row">
+            <label>Descriere <span class="label-hint">(opțional)</span></label>
+            <textarea
+              id="f-description"
+              rows="2"
+              placeholder="Notițe despre această locație..."
+            ></textarea>
+          </div>
+          <div class="form-row">
+            <label>Link <span class="label-hint">(opțional)</span></label>
+            <input type="url" id="f-link" placeholder="https://..." />
+          </div>
+          <div class="form-row">
+            <label>Imagini <span class="label-hint">(opțional)</span></label>
+            <input type="file" id="f-images" accept="image/*" multiple />
+            <div id="image-preview"></div>
+          </div>
+
+          <!-- ── Secțiune proprietate imobiliară (opțional) ── -->
+          <div class="prop-section-toggle" id="prop-toggle">
+            <i class="fa-solid fa-house-chimney-crack"></i> Informații
+            proprietate
+            <span class="prop-toggle-hint">(opțional)</span>
+            <i
+              class="fa-solid fa-chevron-down prop-chevron"
+              id="prop-chevron"
+            ></i>
+          </div>
+          <div id="prop-section" style="display: none">
+            <div class="form-row form-row-half">
+              <div>
+                <label>Tip teren</label>
+                <select id="f-land-type">
+                  <option value="">--</option>
+                  <option value="intravilan">Intravilan</option>
+                  <option value="extravilan">Extravilan</option>
+                  <option value="mixt">Mixt (intravilan + extravilan)</option>
+                </select>
+              </div>
+              <div>
+                <label>Suprafață</label>
+                <div class="input-unit-wrap">
+                  <input
+                    type="number"
+                    id="f-area"
+                    placeholder="ex: 5000"
+                    min="0"
+                    step="any"
+                  />
+                  <select id="f-area-unit">
+                    <option value="mp">mp</option>
+                    <option value="ha">ha</option>
+                    <option value="ari">ari</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label>Preț</label>
+              <div class="price-calc-wrap">
+                <div class="price-field">
+                  <span class="price-label">Total (€)</span>
+                  <input
+                    type="number"
+                    id="f-price-total"
+                    placeholder="ex: 25000"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+                <div class="price-sep">sau</div>
+                <div class="price-field">
+                  <span class="price-label">€/mp</span>
+                  <input
+                    type="number"
+                    id="f-price-sqm"
+                    placeholder="ex: 5"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+                <div class="price-sep">sau</div>
+                <div class="price-field">
+                  <span class="price-label">RON total</span>
+                  <input
+                    type="number"
+                    id="f-price-ron"
+                    placeholder="ex: 120000"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+              </div>
+              <div id="price-calc-result" class="price-calc-result"></div>
+            </div>
+
+            <div class="form-row">
+              <label>Construcție pe teren</label>
+              <div class="radio-group">
+                <label class="radio-opt"
+                  ><input type="radio" name="f-house" value="nu" checked /> Fără
+                  construcție</label
+                >
+                <label class="radio-opt"
+                  ><input type="radio" name="f-house" value="locuibila" /> Casă
+                  locuibilă</label
+                >
+                <label class="radio-opt"
+                  ><input type="radio" name="f-house" value="renovabila" /> Casă
+                  renovabilă</label
+                >
+                <label class="radio-opt"
+                  ><input type="radio" name="f-house" value="demolare" /> Casă
+                  de demolat</label
+                >
+                <label class="radio-opt"
+                  ><input type="radio" name="f-house" value="necunoscut" /> Nu
+                  știu</label
+                >
+              </div>
+            </div>
+
+            <!-- Detalii casă — apare doar dacă e selectată o casă -->
+            <div id="house-details-section" style="display: none">
+              <div class="prop-subsection-label">
+                <i class="fa-solid fa-house"></i> Detalii casă
+              </div>
+
+              <div class="form-row form-row-half">
+                <div>
+                  <label>Număr etaje</label>
+                  <select id="f-house-floors">
+                    <option value="">Nu știu</option>
+                    <option value="parter">Parter</option>
+                    <option value="p+1">Parter + 1 etaj</option>
+                    <option value="p+2">Parter + 2 etaje</option>
+                    <option value="p+m">Parter + mansardă</option>
+                    <option value="alta">Alt regim</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Suprafață construită (mp)</label>
+                  <input
+                    type="number"
+                    id="f-house-area"
+                    placeholder="ex: 120"
+                    min="0"
+                    step="any"
+                  />
+                </div>
+              </div>
+
+              <div class="form-row form-row-half">
+                <div>
+                  <label>Băi</label>
+                  <select id="f-house-baths">
+                    <option value="">Nu știu</option>
+                    <option value="0">Fără baie</option>
+                    <option value="1">1 baie</option>
+                    <option value="2">2 băi</option>
+                    <option value="3+">3+ băi</option>
+                  </select>
+                </div>
+                <div>
+                  <label>Bucătărie</label>
+                  <select id="f-house-kitchen">
+                    <option value="">Nu știu</option>
+                    <option value="da">Da</option>
+                    <option value="bucatarie-vara">Bucătărie de vară</option>
+                    <option value="nu">Nu</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <label>Anexe / dependințe</label>
+                <div class="check-grid">
+                  <label class="check-opt"
+                    ><input type="checkbox" id="h-annex-garage" /> Garaj</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="h-annex-barn" /> Grajd /
+                    șură</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="h-annex-cellar" /> Pivniță /
+                    beci</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="h-annex-shed" /> Magazie /
+                    atelier</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="h-annex-fence" /> Gard
+                    împrejmuitor</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="h-annex-pool" /> Piscină /
+                    iaz</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="h-annex-unknown" /> Nu
+                    știu</label
+                  >
+                </div>
+              </div>
+
+              <div class="form-row form-row-half">
+                <div>
+                  <label>Curent electric — tras în casă</label>
+                  <div class="radio-group-small">
+                    <label class="radio-opt"
+                      ><input type="radio" name="f-elec-pulled" value="da" />
+                      Tras</label
+                    >
+                    <label class="radio-opt"
+                      ><input type="radio" name="f-elec-pulled" value="nu" />
+                      Netras</label
+                    >
+                    <label class="radio-opt"
+                      ><input
+                        type="radio"
+                        name="f-elec-pulled"
+                        value="ns"
+                        checked
+                      />
+                      Nu știu</label
+                    >
+                  </div>
+                </div>
+                <div>
+                  <label>Apă — trasă în casă</label>
+                  <div class="radio-group-small">
+                    <label class="radio-opt"
+                      ><input type="radio" name="f-water-pulled" value="da" />
+                      Trasă</label
+                    >
+                    <label class="radio-opt"
+                      ><input type="radio" name="f-water-pulled" value="nu" />
+                      Netrasă</label
+                    >
+                    <label class="radio-opt"
+                      ><input
+                        type="radio"
+                        name="f-water-pulled"
+                        value="ns"
+                        checked
+                      />
+                      Nu știu</label
+                    >
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Detalii teren -->
+            <div class="prop-subsection-label" style="margin-top: 10px">
+              <i class="fa-solid fa-map"></i> Detalii teren
+            </div>
+
+            <div class="form-row form-row-half">
+              <div>
+                <label>Configurație teren</label>
+                <div class="radio-group-small">
+                  <label class="radio-opt"
+                    ><input type="radio" name="f-land-config" value="grupat" />
+                    Grupat (o singură parcelă)</label
+                  >
+                  <label class="radio-opt"
+                    ><input
+                      type="radio"
+                      name="f-land-config"
+                      value="impartit"
+                    />
+                    Împărțit (mai multe parcele)</label
+                  >
+                  <label class="radio-opt"
+                    ><input
+                      type="radio"
+                      name="f-land-config"
+                      value="ns"
+                      checked
+                    />
+                    Nu știu</label
+                  >
+                </div>
+              </div>
+              <div>
+                <label>Acces la proprietate</label>
+                <div class="radio-group-small">
+                  <label class="radio-opt"
+                    ><input type="radio" name="f-access" value="asfalt" /> Drum
+                    asfaltat</label
+                  >
+                  <label class="radio-opt"
+                    ><input type="radio" name="f-access" value="pamant" /> Drum
+                    de pământ</label
+                  >
+                  <label class="radio-opt"
+                    ><input type="radio" name="f-access" value="pietruit" />
+                    Drum pietruit</label
+                  >
+                  <label class="radio-opt"
+                    ><input type="radio" name="f-access" value="fara" /> Fără
+                    acces direct</label
+                  >
+                  <label class="radio-opt"
+                    ><input type="radio" name="f-access" value="ns" checked />
+                    Nu știu</label
+                  >
+                </div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <label>Utilități</label>
+              <div class="utilities-grid">
+                <div class="util-group">
+                  <div class="util-group-label">
+                    <i class="fa-solid fa-droplet"></i> Apă
+                  </div>
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-water-network" /> Rețea
+                    publică</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-water-well" /> Fântână
+                    proprie</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-water-river" /> Râu / pârâu în
+                    apropiere</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-water-none" /> Lipsă</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-water-unknown" /> Nu
+                    știu</label
+                  >
+                </div>
+
+                <div class="util-group">
+                  <div class="util-group-label">
+                    <i class="fa-solid fa-bolt"></i> Curent electric
+                  </div>
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-elec-onsite" /> Pe
+                    locație</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-elec-nearby" /> Aproape (stâlp
+                    în zonă)</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-elec-none" /> Lipsă</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-elec-unknown" /> Nu
+                    știu</label
+                  >
+                </div>
+
+                <div class="util-group">
+                  <div class="util-group-label">
+                    <i class="fa-solid fa-fire-flame-curved"></i> Gaze
+                  </div>
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-gas-onsite" /> Pe
+                    locație</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-gas-nearby" /> Aproape
+                    (conductă în zonă)</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-gas-none" /> Lipsă</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-gas-unknown" /> Nu știu</label
+                  >
+                </div>
+
+                <div class="util-group">
+                  <div class="util-group-label">
+                    <i class="fa-solid fa-toilet"></i> Canalizare
+                  </div>
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-sewer-network" /> Rețea
+                    publică</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-sewer-septic" /> Fosă
+                    septică</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-sewer-none" /> Lipsă</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-sewer-unknown" /> Nu
+                    știu</label
+                  >
+                </div>
+
+                <div class="util-group">
+                  <div class="util-group-label">
+                    <i class="fa-solid fa-temperature-half"></i> Încălzire
+                  </div>
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-heat-central" /> Centrală
+                    termică</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-heat-gas" /> Gaze (centrală
+                    proprie)</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-heat-stove" /> Sobă
+                    (lemne/cărbune)</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-heat-electric" /> Electric
+                    (calorifere)</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-heat-none" /> Fără
+                    încălzire</label
+                  >
+                  <label class="check-opt"
+                    ><input type="checkbox" id="u-heat-unknown" /> Nu
+                    știu</label
+                  >
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- ── end proprietate ── -->
+
+          <div id="geocode-status"></div>
+          <div class="form-actions">
+            <button type="button" id="btn-cancel-modal">Anulează</button>
+            <button type="submit" id="btn-save-location">
+              <i class="fa-solid fa-floppy-disk"></i> Salvează
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Color picker popup -->
+    <div id="color-picker-popup" class="hidden">
+      <div class="cp-title">Etichetă locație</div>
+      <div class="cp-presets">
+        <button class="cp-preset" data-color="#34a853" data-label="De văzut" style="background:#34a853" title="De văzut">✓</button>
+        <button class="cp-preset" data-color="#f9ab00" data-label="Mă gândesc" style="background:#f9ab00" title="Mă gândesc">?</button>
+        <button class="cp-preset" data-color="#d32f2f" data-label="Nu" style="background:#d32f2f" title="Nu">✗</button>
+        <button class="cp-preset" data-color="#f57c00" data-label="Favorit" style="background:#f57c00" title="Favorit">★</button>
+        <button class="cp-preset" data-color="#1a73e8" data-label="Normal" style="background:#1a73e8" title="Normal">●</button>
+        <button class="cp-preset" data-color="#7b1fa2" data-label="Prioritar" style="background:#7b1fa2" title="Prioritar">!</button>
+      </div>
+      <div class="cp-custom-row">
+        <input type="color" id="cp-custom-color" value="#1a73e8" title="Culoare personalizată" />
+        <input type="text" id="cp-custom-label" placeholder="Etichetă..." maxlength="20" />
+      </div>
+      <div class="cp-actions">
+        <button id="cp-clear">Șterge</button>
+        <button id="cp-apply">Aplică</button>
+      </div>
+    </div>
+
+    <!-- Weather & Traffic Modal -->
+    <div id="weather-overlay" class="hidden">
+      <div id="weather-modal">
+        <div id="weather-header">
+          <div>
+            <h2 id="weather-title">
+              <i class="fa-solid fa-cloud-sun"></i> Vreme & Trafic
+            </h2>
+            <div id="weather-subtitle"></div>
+          </div>
+          <button id="weather-close"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="weather-tabs">
+          <button class="wtab active" data-tab="hourly">
+            <i class="fa-solid fa-clock"></i> Ore
+          </button>
+          <button class="wtab" data-tab="daily">
+            <i class="fa-solid fa-calendar-days"></i> 7 Zile
+          </button>
+          <button class="wtab" data-tab="traffic">
+            <i class="fa-solid fa-car-burst"></i> Trafic
+          </button>
+        </div>
+        <div id="weather-body">
+          <div id="wtab-hourly" class="wtab-content active"></div>
+          <div id="wtab-daily" class="wtab-content"></div>
+          <div id="wtab-traffic" class="wtab-content"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script src="locations.js"></script>
+    <script src="routing.js"></script>
+    <script src="ui.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
