@@ -1,5 +1,9 @@
 // ── Main App ─────────────────────────────────────────────────────
 (function () {
+  // Register Service Worker for PWA
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  }
   // Init map centered on Romania
   const map = L.map('map').setView([45.9432, 24.9668], 7);
   L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
