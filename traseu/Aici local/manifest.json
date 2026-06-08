@@ -1,0 +1,26 @@
+{
+  "name": "Planificator Traseu România",
+  "short_name": "Traseu RO",
+  "description": "Planifică trasee cu locații, vreme și trafic — funcționează offline",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["navigation", "travel"],
+  "lang": "ro"
+}
